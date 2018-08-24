@@ -1,0 +1,579 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+<event size="2" name="time"/>
+
+
+<!--list of constants-->
+<constant value="10" name="START_UP"/>
+<constant value="11" name="WAIT"/>
+<constant value="12" name="CALIB"/>
+<constant value="13" name="START"/>
+<constant value="14" name="TYPING"/>
+<constant value="100" name="SPEED"/>
+<constant value="500" name="BLACK_THRESHOLD"/>
+<constant value="500" name="SAFETY_TIME"/>
+<constant value="0" name="ROUGE"/>
+<constant value="1" name="VERT"/>
+<constant value="0" name="NOTHING"/>
+<constant value="1" name="FORWARD"/>
+<constant value="2" name="BACKWARD"/>
+<constant value="3" name="LEFT"/>
+<constant value="4" name="RIGHT"/>
+<constant value="48" name="TABLE_SIZE"/>
+<constant value="-2000" name="MINUS_COUNTER"/>
+<constant value="4" name="DISTANCE"/>
+<constant value="0" name="STOP"/>
+<constant value="3" name="CALIB_TURNS"/>
+<constant value="16" name="TIME_STEP"/>
+<constant value="15" name="CRASH"/>
+<constant value="0" name="HALT"/>
+<constant value="-1" name="DCLICK"/>
+<constant value="-1" name="CHECK"/>
+<constant value="16" name="TEST"/>
+<constant value="1" name="OP_SIZE"/>
+<constant value="-1" name="EXEPTION"/>
+<constant value="0" name="IDLE"/>
+<constant value="1" name="BUSY"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="58594" name="thymio-II">####### CODE THYMIO BEEBOT-LIKE #######
+
+## CODE ECRIT PAR CHRISTOPHE BARRAUD
+## DERNIERE MODIFICATION LE 12 FEVRIER 2016
+
+# better timing, calibration and some other enhancements by Basil Stotz
+
+                                                                                                                                        #var for sd card
+var status_SD = 0
+var data[3] = [0,0,0]
+var read = 0
+var written = 0
+# vars for BLACK_THRESHOLD --> grey calibration
+#var black=1024
+#var white=0
+var grey=512
+#vars for displaying programm counter
+var index 
+var c[8]
+var l
+var grid_size=3  # in 5cm units
+#calc speed dep. safety_time
+var safe_time
+
+var dclick
+
+var z
+var zz                                                                                                                                        
+                                                                                                                                         
+var led[3] = [0,0,0]
+
+#var dummy
+var tmp
+var tmp0
+var tmp1
+var tmp2
+var turns=0 #count turns during calibration
+
+
+var counter_calib = 0
+
+var led_clignote = ROUGE
+
+var time_straight_20cm = 393
+var time_left_turn_360 = 595
+var time_right_turn_360 = 582
+
+#var for motor control
+var speed=SPEED
+var wayd
+var o_wayd
+
+var submode = 0
+var counter = 0
+
+#var int
+var suml
+var sumr
+#var sumbakl
+#var sumbakr
+#var sumbakw
+var sl
+var sr
+
+var dir=0
+var odir=1
+
+var Queue[2+1*TABLE_SIZE]                                                                                                                                                                                                                                                                          var Prog[2+1*TABLE_SIZE]
+var Done[2+1*TABLE_SIZE]                                                                                                                                         
+                                                                                                                                           
+                                                                                                                                            var current                                                                                                                                          var mode = START_UP
+var qmode                                                                                                                                         
+
+#onevent startup
+  call math.muldiv(safe_time,SAFETY_TIME/TIME_STEP,200,SPEED)
+  timer.period[0] = 100
+  #timer.period[1] = 500
+  call leds.buttons(0,0,0,0)
+  call sound.system(-1)
+
+onevent prox
+  if mode == CALIB then
+#	counter++
+#	if submode == 1 and prox.ground.delta[0] > grey and prox.ground.delta[1] &lt; grey then
+##	    call math.max(white,white,prox.ground.delta[0])
+##	    call math.min(black,black,prox.ground.delta[1])
+##        grey=(white+black)/2	
+#		led_clignote = VERT
+#	elseif submode == 1 then
+#		led_clignote = ROUGE
+#	end
+#	if submode == 2 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
+#		time_straight_20cm = counter
+##		sumbakw=(suml+sumr)/2
+#		suml=0
+#		sumr=0
+#		sl=0
+#		sr=0
+#		dir=LEFT
+#		turns=0
+#		counter = 0
+#		submode = 3
+#	elseif submode == 3 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
+#		if turns==0 then
+#		   time_left_turn_360=(4*counter)/3
+#		   safe_time = time_left_turn_360/2
+#		   counter=0
+#		   turns=1
+#		elseif turns&lt;CALIB_TURNS then
+#		   turns++
+#		   time_left_turn_360+=counter
+#		   counter=0
+#		else
+#		   time_left_turn_360+=counter
+#		   turns++
+#		   time_left_turn_360/=turns
+##		   sumbakl=abs(suml/turns)
+#		   dir=RIGHT
+#		   turns=0
+#		   counter = 0
+#		   submode = 4
+#       	   suml=0
+#	       sumr=0
+#	       sl=0
+#           sr=0		   
+#		   safe_time=4*time_left_turn_360/5
+#	    end
+#	elseif submode == 4 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
+#		if turns==0 then
+#		   time_right_turn_360=counter
+#		   counter=0
+#		   turns=1
+#		elseif turns&lt;CALIB_TURNS then
+#		   turns++
+#		   time_right_turn_360+=counter
+#		   counter=0
+#		else
+#		   dir=STOP
+#		   time_right_turn_360+=counter
+#		   turns++
+#		   submode = 0
+#		   time_right_turn_360/=turns
+##		   sumbakr=abs(sumr/turns)
+#		   data[0] = time_straight_20cm
+#		   data[1] = time_left_turn_360
+#		   data[2] = time_right_turn_360
+#		   callsub sd_write_values
+#		   mode = WAIT
+#	    end    
+#	end
+  end
+  callsub led
+
+onevent timer0
+  z=(z+1)%2
+  if z==0 then
+  	call leds.bottom.right(0,31,0)
+  else
+    call leds.bottom.right(0,0,0)
+  end
+  if qmode == BUSY or qmode == IDLE then
+      call deque.size(Queue,tmp0)
+      if tmp0>0 then
+        qmode=BUSY
+   	    call deque.pop_front(Queue, current)
+   	    call deque.push_front(Done, current)
+        if current==STOP then
+           led=[0,0,0]
+           dir=STOP
+           timer.period[0]=500			
+        elseif current == FORWARD then
+		   led = [0,0,31]
+	       if prox.horizontal[3]>0 then
+               callsub exeption
+	       else
+		       dir=FORWARD
+		       timer.period[0]=TIME_STEP*(time_straight_20cm*grid_size)/4
+		   end		
+		   call leds.buttons(31,0,0,0)	
+		elseif current == BACKWARD then
+		      led = [31,0,0]
+		      call math.max(tmp,prox.horizontal[5],prox.horizontal[6])
+	          if tmp>0 then
+                callsub exeption
+	          else
+		        dir=BACKWARD
+		        timer.period[0]=TIME_STEP*(time_straight_20cm*grid_size)/4
+		      end
+		      call leds.buttons(0,0,31,0)
+		elseif current == LEFT then
+		      led = [0,31,0]
+		       dir=LEFT
+			   timer.period[0]=TIME_STEP*time_left_turn_360/4
+			   call leds.buttons(0,0,0,31)
+		elseif current == RIGHT then
+		       led=[31,31,0] 
+		       dir=RIGHT
+			   timer.period[0]=TIME_STEP*time_right_turn_360/4 
+	  		   call leds.buttons(0,31,0,0)
+	    elseif current == CHECK then
+	           led=[31,0,31] 
+	           call math.max(tmp,prox.ground.delta[0],prox.ground.delta[1])
+	           if tmp>500 then
+				 callsub exeption
+	           else
+		         dir=STOP
+		         call deque.size(Queue,tmp0)
+		         if tmp0>2*OP_SIZE then
+		           timer.period[0]=500
+		         else
+		           timer.period[0]=2000
+		         end
+		      end
+			  call leds.buttons(31,31,31,31)	  		
+	   elseif current == HALT then
+		      led = [31,31,31]
+			  dir=STOP
+		      timer.period[0]=2000
+			  #call sound.system(0)
+			  call leds.buttons(0,0,0,0)	
+			  mode=EXEPTION
+			  #timer.period[1]=0
+	   end
+	 else
+	   qmode=IDLE
+	 end
+  elseif qmode==EXEPTION then
+#	   j=0
+	   qmode=IDLE
+	   timer.period[0]=100
+	   call leds.buttons(0,0,0,0)
+	   led=[0,0,0]	   	  
+  end
+
+sub exeption
+  dir=STOP
+  qmode=EXEPTION
+  #call sound.system(1)
+  timer.period[0]=2000
+  timer.period[1]=20
+  #led=[0,0,0]
+
+sub play
+  call deque.size(Prog,tmp0)
+  while tmp0>0 do
+    call deque.pop_front(Prog,tmp1)
+    call deque.push_back(Queue,tmp1)
+    call deque.size(Prog,tmp0)       
+  end
+  if tmp1!=HALT then
+  	call deque.push_back(Queue,HALT)
+  	#call deque.push_back(Queue,HALT)
+  end
+  
+sub rewind
+  call deque.size(Done,tmp0)
+  while tmp0>0 do
+    call deque.pop_front(Done,tmp1)
+    call deque.push_front(Prog,tmp1)
+    call deque.size(Done,tmp0)       
+  end
+  
+sub skip
+  call deque.size(Queue,tmp0)
+  while tmp0>0 do
+    call deque.pop_front(Queue,tmp1)
+    call deque.push_front(Done,tmp1)
+    call deque.size(Queue,tmp0)       
+  end
+  
+sub clear
+  call deque.size(Prog,tmp0)
+  call deque.erase(Prog,0,tmp0)
+  call deque.size(Queue,tmp0)
+  call deque.erase(Queue,0,tmp0) 
+  call deque.size(Done,tmp0)
+  call deque.erase(Done,0,tmp0)
+  
+########## TIMER 1 CLIGNOTEMENT ###########
+onevent timer1
+if dclick>0 then
+	if mode == WAIT then
+		mode = TYPING
+#		i=0
+#	    call math.fill(table,0)			
+		led = [31,31,31]
+		callsub led
+	elseif mode == TYPING then
+	    if dclick == 2 then
+	      call sound.system(2)
+	      call deque.push_back(Prog,CHECK)
+	      call deque.push_back(Prog,STOP)
+	    else
+	      call sound.system(2)
+#	      j=0
+		  mode = START
+		  callsub play
+		  #timer.period[0]=10
+		  #led=[0,0,0]
+		end
+	else
+	    #timer.period[0]=0
+		mode = WAIT
+		callsub skip
+		dir=STOP
+		led=[0,0,0]
+		call leds.buttons(0,0,0,0)
+	end
+  dclick=0
+  #timer.period[1]=0
+  call leds.bottom.left(0,0,0)
+else
+  if mode == CALIB then
+	if led_clignote == ROUGE then
+		if led[0] > 0 then
+			led = [0,0,0]
+		else
+			led = [31,0,0]
+		end
+	else
+		if led[1] > 0 then
+			led = [0,0,0]
+		else
+			led = [0,31,0]
+		end
+	end
+  elseif mode==CRASH then
+    if led[0]==0 then
+      if current==FORWARD then
+         led=[1,0,31]      	
+      elseif current==BACKWARD then
+         led=[31,0,0]
+      elseif  current==CHECK then
+         led=[31,0,31]
+      end
+    else
+      led=[0,0,0]	
+    end
+  end
+  #callsub led
+end
+  
+onevent motor
+  zz=(zz+1)%2
+  if zz==0 then
+  	call leds.bottom.left(0,31,0)
+  else
+    call leds.bottom.left(0,0,0)
+  end
+  #call leds.bottom.left(31,31,31)
+  if dir!=odir then
+        sl=0
+        sr=0
+        suml=0
+        sumr=0
+        odir=dir
+   end
+  if dir!=STOP then
+#        sl += motor.left.speed
+#        int=sl/16
+#        suml+=int
+#        sl-=16*int	
+#        sr += motor.right.speed
+#        int=sr/16
+#        sumr+=int
+#        sr-=16*int	 
+#        wayd=abs(suml)-abs(sumr)
+        #if wayd!=o_wayd then
+          wayd=0
+          if dir==FORWARD then  	     
+            motor.left.target=speed-wayd
+   	        motor.right.target=speed+wayd
+          elseif dir==BACKWARD then		     
+            motor.left.target=-speed +wayd
+            motor.right.target=-speed -wayd
+          elseif dir==LEFT then	        
+            motor.left.target = -speed #+wayd
+	        motor.right.target = speed #+wayd
+          elseif dir==RIGHT then	        
+            motor.left.target = speed #-wayd
+            motor.right.target = -speed #-wayd
+          end 
+        #  o_wayd=wayd       	
+        #end
+    else 
+	      motor.left.target = 0
+	      motor.right.target = 0
+    end  
+    #call leds.bottom.left(0,0,0)
+
+    
+########## BOUTONS ##############
+onevent buttons
+  if mode == START_UP then
+	callsub sd_read_values
+#	call math.fill(table,0)
+	mode = WAIT
+  elseif mode == WAIT then
+	led = [0,0,0]
+	#callsub led
+	counter = 0
+	suml=0
+	sumr=0
+	sl=0
+	sr=0
+	dir=STOP
+	#timer.period[0]=0
+  end
+  if button.left == 1 and button.right == 1 then
+	counter_calib++
+	if counter_calib > 100 then
+		mode = CALIB
+		submode = 1	
+		counter_calib = 0
+		#timer.period[1]=500
+	end	
+  else
+	counter_calib = 0
+  end
+  if  mode==TYPING then
+	when button.forward == 1 do
+		call sound.system(2)
+		call deque.push_back(Prog,FORWARD)
+		call deque.push_back(Prog,STOP)
+	end
+	when button.backward == 1 do
+		call sound.system(2)
+		call deque.push_back(Prog,BACKWARD)
+		call deque.push_back(Prog,STOP)
+	end
+	when button.left == 1 do
+		call sound.system(2)
+		call deque.push_back(Prog,LEFT)
+		call deque.push_back(Prog,STOP)
+	end
+	when button.right == 1 do
+		call sound.system(2)
+		call deque.push_back(Prog,RIGHT)
+		call deque.push_back(Prog,STOP)		
+	end
+	call deque.size(Prog,tmp)
+	if tmp-1 >= TABLE_SIZE*OP_SIZE then
+		call sound.system(2)
+		mode = START
+		callsub play
+#		j=0
+	end
+  elseif  mode==WAIT then
+    if button.backward==1 then
+      call sound.system(2)
+#      j=0
+      mode=START
+      callsub rewind
+      callsub play  	
+    end
+  end
+  when button.center == 1 do
+	    if dclick==0 then
+          timer.period[1]=500
+          call leds.bottom.left(31,0,0)
+          dclick=1
+        else
+          dclick++
+        end 
+  end
+  callsub led
+
+
+onevent button.forward
+  if button.forward == 1 then
+  	call sound.system(2)
+	if mode == CALIB then
+		if submode == 1 and prox.ground.delta[0] > grey and prox.ground.delta[1] &lt; grey then
+			submode = 2
+			counter = 0
+			dir=FORWARD
+		end
+	end
+  end
+
+
+
+# subroutines
+sub led
+  #call leds.bottom.left(led[0],led[1],led[2])
+  #call leds.bottom.right(led[0],led[1],led[2])
+  call leds.top(led[0],led[1],led[2])
+  call math.fill(c,0)
+  call deque.size(Prog,tmp0)
+  call deque.size(Done,tmp1)
+  tmp0=(tmp0+tmp1)/2
+  if tmp0>0 then
+    c[(tmp0-1)%8]+=4 	
+  end
+  if  tmp1>0 then
+#    c[((tmp1/2)-1)%8]+=27 	
+  end
+  call leds.circle(c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7])      
+
+sub sd_read_values
+  call sd.open(0,status_SD)
+  if status_SD == 0 then
+	call sd.read(data,read)
+	if read == 3 then
+		time_straight_20cm = data[0]/100
+		time_left_turn_360 = data[1]/100
+		time_right_turn_360 = data[2]/100		
+	end
+  end
+  call sd.open(-1,status_SD)
+
+sub sd_write_values
+  call sd.open(0,status_SD)
+  call math.mul(data,data,[100,100,100])  
+  call sd.write(data,written)
+  if written == 3 then
+	#call sound.play(2)
+	written = 0
+   end
+   #write length turn lest 360
+#   call sd.open(-1,status_SD)
+#   call sd.open(1,status_SD)
+#   call sd.write([sumbakw,sumbakl,sumbakr],written)
+#   if written == 3 then
+#	  call sound.play(1)
+#	  written = 0
+#   end
+#   call sd.open(-1,status_SD)
+
+</node>
+
+
+</network>

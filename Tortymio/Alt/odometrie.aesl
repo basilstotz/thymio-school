@@ -1,0 +1,243 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+<event size="3" name="control"/>
+<event size="1" name="run"/>
+
+
+<!--list of constants-->
+<constant value="32767" name="MAX_INT"/>
+<constant value="0" name="WAIT"/>
+<constant value="1" name="SEARCH"/>
+<constant value="2" name="GOBACK"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="58594" name="thymio-II"># https://davidjsherman.github.io/inirobot-scratch-thymioII/aesl-doc/group___odometry.html
+
+#  mr=motor.right.speed
+#  ml=motor.left.speed
+#  phi+=k1*(mr-ml)/b
+#  call math.sin(sin,phi)
+#  call math.cos(cos,phi)
+#  delta=(mr+ml)/2
+#  x+=k2*delta*cos
+#  y+=k2*delta*sin
+
+var sintab[360]
+var j
+var alpha
+var index
+#var sin_index
+#var cos_index
+
+var r=0
+
+#var k1  #  = 32.36
+#var k2  #  = 6.78e-7
+#var b   #  = 95mm
+
+var mrs
+var mls
+
+var mode
+var old_mode
+
+var delta
+var cos
+var sin
+
+var i
+var l[8]
+var m
+var n
+
+var status_SD = 0
+var data[1] = [888]
+var read = 0
+
+var way_180=5652
+var dphi
+var xx
+var yy
+var int
+#var frac
+var soll_phi=-90
+var dx
+var dy
+var twophi
+var winkel
+
+var phi
+var x
+var y
+
+var distance
+
+var by
+var bx
+var bphi
+
+
+#sub sd_read_calib
+#  call sd.open(1,status_SD)
+#  if status_SD == 0 then
+#	call sd.read(way_180,read)
+#	if read == 2 then
+#		way_180 /=2		
+#	end  
+#  end
+#  #call sd.open(-1,status_SD)    
+
+
+
+#onevent startup
+  x=0
+  y=0
+  phi=0
+  mode=WAIT
+  way_180=5652
+  for j in 0:359 do
+    call math.muldiv(alpha,MAX_INT,j-180,180)
+  	call math.sin(sintab[j%360],alpha)
+  end
+  #timer.period[0]=100
+  #motor.left.target=10
+  
+onevent run
+  mode=event.args[0]
+  if mode==WAIT then
+     call leds.top(0,31,0)
+     motor.left.target=0
+     motor.right.target=0  	
+  elseif mode==GOBACK then
+     call leds.top(0,0,31)
+  elseif mode==SEARCH then
+     x=0
+     bx=0
+     y=0
+     by=0
+     phi=0
+     bphi=0
+     soll_phi=90
+  end
+  
+onevent control
+if mode==SEARCH then
+  call leds.top(31,0,0)
+  motor.left.target=30*(-2*event.args[1]-event.args[0])
+  motor.right.target=30*(-2*event.args[1]+event.args[0])
+end
+
+onevent motor
+#call leds.top(31,31,31)
+#if motor.left.target!=0 or motor.right.target!=0 then
+  # calc phi
+  call math.muldiv(dphi,MAX_INT/32,motor.right.speed-motor.left.speed,way_180)
+  phi+=dphi
+  if phi>MAX_INT/2 then
+  	phi-=MAX_INT
+  elseif phi &lt; -MAX_INT/2 then
+    phi+=MAX_INT
+  end
+  # calc x and y
+  call math.muldiv(index,2*phi,180,MAX_INT)
+  index=index+180
+  bphi=index
+  #delta=(motor.right.speed+motor.left.speed)/2
+  delta=(motor.right.speed+motor.left.speed)*32
+  call math.muldiv(dx,delta,sintab[(index+90)%360],MAX_INT)
+  call math.muldiv(dy,delta,sintab[index],MAX_INT)
+  x+=dx
+  y+=dy
+#end
+#call leds.top(0,0,0)
+
+onevent prox
+  i=(i+1)%2
+  if i==0 then
+  	call leds.bottom.left(31,0,0)
+  else
+    call leds.bottom.left(0,0,0)
+  end
+
+
+  twophi=2*phi
+  #update bphi  
+#  call math.muldiv(bphi,180,2*phi,MAX_INT)
+  
+  #update bx,by using 21bit arit.
+  int=x/(16*64)
+  x-=int*(16*64)
+  bx+=int
+  int=y/(16*64)
+  y-=int*(16*64)
+  by+=int  
+  
+#  if bphi-soll_phi>5 then
+#  	motor.left.target=100
+#  	motor.right.target=-100
+##  elseif phi-soll_phi>5 then
+##    motor.left.target=20
+##  	motor.right.target=-20
+#  elseif bphi-soll_phi&lt;-5 then
+#  	motor.left.target=-100
+#  	motor.right.target=100  
+#  else
+#  	motor.left.target=0
+#  	motor.right.target=0  
+#  end  
+
+#  # calc distance
+  call math.muldiv(xx,bx,bx,MAX_INT)
+  call math.muldiv(yy,by,by,MAX_INT)
+  call math.sqrt(distance,bx*bx+by*by)
+  call math.atan2(winkel,by,bx)
+  call math.muldiv(winkel,winkel,180,MAX_INT)
+  callsub display
+
+
+sub display
+  call math.muldiv(i,128,twophi,MAX_INT)
+  call math.fill(l,0)
+  i+=128
+  m=i/32
+  n=i%32
+  l[m%8]=32-n
+  l[(m+1)%8]=n
+  #                  0   32   64   96   128  160  192  224
+  call leds.circle(l[0],l[1],l[2],l[3],l[4],l[5],l[6],l[7])
+ 
+
+</node>
+
+
+<!--node thymio-II-->
+<node nodeId="46383" name="thymio-II">var old_mode=-1
+var mode=0
+
+onevent acc
+  	#emit control acc 
+
+onevent buttons
+  if button.forward==1 then
+  	mode=SEARCH
+  elseif button.center==1 then
+    mode=WAIT
+  elseif button.backward==1 then
+    mode=GOBACK
+  end
+  if mode!=old_mode then
+     emit run [mode]
+  	 old_mode=mode
+  end
+  </node>
+
+
+</network>

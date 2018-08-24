@@ -1,0 +1,410 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="10" name="START_UP"/>
+<constant value="11" name="WAIT"/>
+<constant value="12" name="CALIB"/>
+<constant value="13" name="START"/>
+<constant value="14" name="TYPING"/>
+<constant value="100" name="SPEED"/>
+<constant value="500" name="BLACK_THRESHOLD"/>
+<constant value="500" name="SAFETY_TIME"/>
+<constant value="0" name="ROUGE"/>
+<constant value="1" name="VERT"/>
+<constant value="0" name="NOTHING"/>
+<constant value="1" name="FORWARD"/>
+<constant value="2" name="BACKWARD"/>
+<constant value="3" name="LEFT"/>
+<constant value="4" name="RIGHT"/>
+<constant value="24" name="TABLE_SIZE"/>
+<constant value="-500" name="MINUS_COUNTER"/>
+<constant value="4" name="DISTANCE"/>
+<constant value="0" name="STOP"/>
+<constant value="3" name="CALIB_TURNS"/>
+<constant value="16" name="TIME_STEP"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="58594" name="thymio-II">####### CODE THYMIO BEEBOT-LIKE #######
+
+## CODE ECRIT PAR CHRISTOPHE BARRAUD
+## DERNIERE MODIFICATION LE 12 FEVRIER 2016
+
+# better timing, calibration and some other enhancements by Basil Stotz
+                                                                                                                                         var mode = START_UP
+var submode = 0
+var counter = 0
+var led[3] = [0,0,0]
+
+var table[TABLE_SIZE]
+var i = 0
+var j = 0
+var k = 0
+
+var turns=0 #count turns during calibration
+
+
+var counter_calib = 0
+
+var led_clignote = ROUGE
+
+var time_straight_20cm = 393*16
+var time_left_turn_360 = 595*16
+var time_right_turn_360 = 582*16
+
+#var for motor control
+var speed=SPEED
+var wayd
+
+var int
+var suml
+var sumr
+var sumbakl
+var sumbakr
+var sumbakw
+var sl
+var sr
+
+var dir=0
+var odir=1
+
+#var for sd card
+var status_SD = 0
+var data[3] = [0,0,0]
+var read = 0
+var written = 0
+# vars for BLACK_THRESHOLD --> grey calibration
+var black=1024
+var white=0
+var grey=512
+#vars for displaying programm counter
+var index 
+var c[8]
+var l
+var grid_size=3  # in 5cm units
+#calc speed dep. safety_time
+var safe_time
+
+
+#onevent startup
+  call math.muldiv(safe_time,SAFETY_TIME/TIME_STEP,200,SPEED)
+  timer.period[0] = TIME_STEP
+  timer.period[1] = 500
+
+
+onevent motor
+  call leds.bottom.left(31,31,31)
+  if dir!=odir then
+        sl=0
+        sr=0
+        suml=0
+        suml=0
+        odir=dir
+  end
+  if dir!=STOP then
+        sl += motor.left.speed
+        int=sl/16
+        suml+=int
+        sl-=16*int	
+        sr += motor.right.speed
+        int=sr/16
+        sumr+=int
+        sr-=16*int	 
+        wayd=abs(suml)-abs(sumr)
+        if dir==FORWARD then  	     
+           motor.left.target=speed-wayd
+   	       motor.right.target=speed+wayd
+        elseif dir==BACKWARD then		     
+           motor.left.target=-speed+wayd
+           motor.right.target=-speed-wayd
+        elseif dir==LEFT then	        
+           motor.left.target = -speed+wayd
+	       motor.right.target = speed+wayd
+        elseif dir==RIGHT then	        
+           motor.left.target = speed-wayd
+           motor.right.target = -speed-wayd
+        end
+   else 
+	    motor.left.target = 0
+	    motor.right.target = 0
+   end
+   call leds.bottom.left(0,0,0)
+
+
+
+
+
+sub led
+call leds.bottom.left(led[0],led[1],led[2])
+call leds.bottom.right(led[0],led[1],led[2])
+call leds.top(led[0],led[1],led[2])
+
+sub sd_read_values
+call sd.open(0,status_SD)
+if status_SD == 0 then
+	call sd.read(data,read)
+	if read == 3 then
+		time_straight_20cm = data[0]/TIME_STEP
+		time_left_turn_360 = data[1]/TIME_STEP
+		time_right_turn_360 = data[2]/TIME_STEP		
+	end
+end
+call sd.open(-1,status_SD)
+
+sub sd_write_values
+call sd.open(0,status_SD)
+call math.mul(data,data,[TIME_STEP,TIME_STEP,TIME_STEP])
+call sd.write(data,written)
+if written == 3 then
+	#call sound.play(2)
+	written = 0
+end
+#write length turn lest 360
+call sd.open(-1,status_SD)
+call sd.open(1,status_SD)
+call sd.write([sumbakw,sumbakl,sumbakr],written)
+if written == 3 then
+	call sound.play(1)
+	written = 0
+end
+call sd.open(-1,status_SD)
+
+#event handlers
+
+onevent timer0
+  if mode == START_UP then
+	callsub sd_read_values
+	call math.fill(table,0)
+	mode = WAIT
+  elseif mode == WAIT then
+	led = [0,0,0]
+	callsub led
+	counter = 0
+	suml=0
+	sumr=0
+	sl=0
+	sr=0
+	dir=STOP
+  elseif mode == CALIB then
+	counter++
+	if submode == 1 and prox.ground.delta[0] > grey and prox.ground.delta[1] &lt; grey then
+	    call math.max(white,white,prox.ground.delta[0])
+	    call math.min(black,black,prox.ground.delta[1])
+        grey=(white+black)/2	
+		led_clignote = VERT
+	elseif submode == 1 then
+		led_clignote = ROUGE
+	end
+	if submode == 2 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
+		time_straight_20cm = counter
+		sumbakw=suml
+		suml=0
+		sumr=0
+		sl=0
+		sr=0
+		dir=LEFT
+		turns=0
+		counter = 0
+		submode = 3
+		
+	elseif submode == 3 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
+		if turns==0 then
+		   time_left_turn_360=(4*counter)/3
+		   safe_time = time_left_turn_360/2
+		   counter=0
+		   turns=1
+		elseif turns&lt;CALIB_TURNS then
+		   turns++
+		   time_left_turn_360+=counter
+		   counter=0
+		else
+		   time_left_turn_360+=counter
+		   turns++
+		   time_left_turn_360/=turns
+		   sumbakl=abs(suml/turns)
+		   dir=RIGHT
+		   turns=0
+		   counter = 0
+		   submode = 4
+       	   suml=0
+	       sumr=0
+	       sl=0
+           sr=0		   
+		   safe_time=4*time_left_turn_360/5
+	    end
+	elseif submode == 4 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
+		if turns==0 then
+		   time_right_turn_360=counter
+		   counter=0
+		   turns=1
+		elseif turns&lt;CALIB_TURNS then
+		   turns++
+		   time_right_turn_360+=counter
+		   counter=0
+		else
+		   dir=STOP
+		   time_right_turn_360+=counter
+		   turns++
+		   submode = 0
+		   time_right_turn_360/=turns
+		   sumbakr=abs(sumr/turns)
+		   data[0] = time_straight_20cm
+		   data[1] = time_left_turn_360
+		   data[2] = time_right_turn_360
+		   callsub sd_write_values
+		   mode = WAIT
+	    end    
+	end
+	callsub led
+  elseif mode == START then
+	if counter >= 0 then
+		if table[j] == FORWARD then
+		    dir=FORWARD
+			if counter >= (time_straight_20cm*grid_size)/4 then
+				j++
+				counter=MINUS_COUNTER/TIME_STEP
+				dir=STOP
+			end
+			led = [0,0,31]
+		elseif table[j] == BACKWARD then
+		    dir=BACKWARD		
+			if counter >= (time_straight_20cm*grid_size)/4 then
+				j++
+				counter=MINUS_COUNTER/TIME_STEP
+				dir=STOP
+			end
+			led = [31,0,0]
+		elseif table[j] == LEFT then
+		    dir=LEFT
+			if counter >= time_left_turn_360/4 then
+				j++
+				counter=MINUS_COUNTER/TIME_STEP
+				dir=STOP
+			end
+			led = [0,31,0]
+		elseif table[j] == RIGHT then
+		    dir=RIGHT		
+			if counter >= time_right_turn_360/4 then
+				j++
+				counter=MINUS_COUNTER/TIME_STEP
+				dir=STOP
+			end	
+			led = [31,31,0]
+		else
+			j=0
+			i=0
+			call math.fill(table,0)
+			mode=WAIT
+		end		
+	end
+	counter++
+	callsub led
+end
+# display the program counter (back'n'forth)
+if  mode == START then
+  index=i-j
+else
+  index=i
+end
+for l in 0:7 do
+   call math.clamp(c[l],(index-(TABLE_SIZE/8)*l)*8,0,31)
+end
+call leds.circle(c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7])
+
+########## TIMER 1 CLIGNOTEMENT ###########
+onevent timer1
+if mode == CALIB then
+	if led_clignote == ROUGE then
+		if led[0] > 0 then
+			led = [0,0,0]
+		else
+			led = [31,0,0]
+		end
+	else
+		if led[1] > 0 then
+			led = [0,0,0]
+		else
+			led = [0,31,0]
+		end
+	end
+end
+
+########## BOUTONS ##############
+onevent buttons
+if button.left == 1 and button.right == 1 then
+	counter_calib++
+	if counter_calib > 100 then
+		mode = CALIB
+		submode = 1	
+		counter_calib = 0
+	end	
+else
+	counter_calib = 0
+end
+
+
+if mode == TYPING then
+	when button.forward == 1 do
+		table[i] = FORWARD
+		i++
+	end
+	when button.backward == 1 do
+		table[i] = BACKWARD
+		i++
+	end
+	when button.left == 1 do
+		table[i] = LEFT
+		i++
+	end
+	when button.right == 1 do
+		table[i] = RIGHT
+		i++
+	end
+	if i >= TABLE_SIZE then
+		mode = START
+		j=0
+		counter=0
+	end
+end
+
+onevent button.forward
+if button.forward == 1 then
+	if mode == CALIB then
+		if submode == 1 and prox.ground.delta[0] > grey and prox.ground.delta[1] &lt; grey then
+			submode = 2
+			counter = 0
+			dir=FORWARD
+		end
+	end
+end
+
+onevent button.center
+if button.center == 1 then
+	if mode == WAIT then
+		mode = TYPING
+		j=0
+		counter=0
+		led = [31,31,31]
+		callsub led
+	elseif mode == TYPING then
+		mode = START
+	else
+		mode = WAIT
+		i=0
+		call math.fill(table,0)
+	end
+end
+
+</node>
+
+
+</network>

@@ -1,0 +1,252 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="32767" name="MAX_INT"/>
+<constant value="0" name="SEARCH"/>
+<constant value="1" name="GOBACK"/>
+<constant value="2" name="ARRIVED"/>
+<constant value="3" name="WAIT"/>
+<constant value="4" name="FOUND"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="23236" name="thymio-II">#postion
+
+var time_step
+var speed=100
+var turning=0
+
+
+var xx
+var yy
+
+#calib data
+var status_SD = 0
+var data[2] = [0,0]
+var read = 0
+#var written = 0
+var time_straight_20cm 
+var time_turn_360 	
+
+var balance
+var min
+var max
+var mean
+
+#display vars
+var l[8]
+var i
+
+var cos
+var sin
+var dx
+var dy
+var x
+var y
+
+var phi
+var angle
+var run=0
+var found=0
+
+var turn_time
+var walk_time
+
+var distance
+var winkel
+var mode
+var save
+
+var m
+var n
+var o
+
+#onevent startup
+callsub sd_read_values
+time_step=16
+timer.period[0]=time_step
+mode=WAIT
+
+onevent timer0
+if  mode==SEARCH then
+  #if run==1 then
+    if turning>0 then
+  	  turn_time+=balance*time_step
+    else
+      walk_time+=time_step
+    end
+  #end
+elseif mode==GOBACK then
+  if abs(phi)>2*time_step then
+    call leds.top(31,31,0)
+  	if phi>0 then
+        motor.left.target=speed
+  	    motor.right.target=-speed
+  	    phi-=time_step
+    else
+      	motor.left.target=-speed
+  	    motor.right.target=speed
+  	    phi+=time_step
+    end
+  elseif  abs(winkel)>2*time_step then
+    call leds.top(0,31,31)
+    if winkel>0 then
+        motor.left.target=speed
+  	    motor.right.target=-speed
+  	    winkel-=time_step
+    else
+      	motor.left.target=-speed
+  	    motor.right.target=speed
+  	    winkel+=time_step
+    end
+  elseif distance>0 then
+     call leds.top(31,0,31)
+     motor.left.target=speed
+  	 motor.right.target=speed
+  	 distance-=time_step
+  end
+  if abs(winkel)&lt;=2*time_step and distance&lt;=0 then
+  	motor.left.target=0
+  	motor.right.target=0
+  	call leds.top(31,31,31)
+  	call sound.system(3)
+  	mode=ARRIVED
+  end
+end
+timer.period[0]=time_step
+
+onevent prox
+if mode==SEARCH then
+ if  run==1 then
+   call math.stat(prox.horizontal[0:4],min,max,mean)
+   if max>500 then
+     if  turning==0 then
+       callsub update_pos   
+       walk_time=0
+       call math.dot(balance,[-2,-1,0,1,2],prox.horizontal[0:4],1)
+       call math.clamp(balance,balance,-1,1)
+       turning=1    	
+     else
+       turning++
+     end
+     motor.left.target=-balance*speed
+     motor.right.target=balance*speed  	
+   else #max>500
+     if turning>0 then
+       turning--	
+     else
+       motor.left.target=speed
+       motor.right.target=speed
+     end
+   end #max>500
+ else #run
+   motor.left.target=0
+   motor.right.target=0
+ end #run
+ if prox.ground.delta[0]&lt;512 and prox.ground.delta[1]&lt;512 then
+   run=0
+   if found==0 then
+     found=1
+     callsub update_pos
+     callsub calc_back
+     mode=GOBACK
+   end
+ end
+ callsub display
+end #mode==0
+  
+sub update_pos
+  call math.muldiv(angle,MAX_INT,phi-time_turn_360/2,time_turn_360)
+  call math.cos(cos,angle)
+  call math.sin(sin,angle)
+  call math.muldiv(dx,walk_time/time_step,cos,MAX_INT)
+  call math.muldiv(dy,walk_time/time_step,sin,MAX_INT)
+  x+=dx
+  y+=dy
+  #walk_time=0
+
+onevent buttons
+  if button.forward==1 then
+  	run=1
+  	found=0
+  	turn_time=0
+  	turning=0
+  	mode=SEARCH
+  elseif button.center==1 then
+    callsub update_pos
+    run=0
+    found=0
+    turning=0
+    mode=WAIT
+  end
+  
+if  mode==SEARCH then
+    if run==0 then
+    if found==1 then
+      call leds.top(31,0,0)
+    else
+      call leds.top(31,31,31)  
+  	end
+  else
+    if found==1 then
+      call leds.top(31,0,0)
+    else
+      call leds.top(0,31,0)
+    end
+  end
+end
+  
+sub sd_read_values
+call sd.open(0,status_SD)
+if status_SD == 0 then
+	call sd.read(data,read)
+	if read == 2 then
+		time_straight_20cm = data[0]
+		time_turn_360 = data[1]		
+	end
+end
+call sd.open(-1,status_SD)
+
+sub display
+  phi=turn_time
+  while phi>time_turn_360 do
+  	phi-=time_turn_360
+  end
+    while phi&lt;-time_turn_360 do
+  	phi+=time_turn_360
+  end
+  call math.muldiv(i,256,phi,time_turn_360)
+  if i&lt;0 then
+  	i+=256
+  end
+  call math.fill(l,0)
+  m=i/32
+  n=i%32
+  l[m]=32-n
+  l[(m+1)%8]=n
+  #                  0   32   64   96   128  160  192  224
+  call leds.circle(l[0],l[1],l[2],l[3],l[4],l[5],l[6],l[7])
+ 
+  
+sub calc_back
+  call math.atan2(winkel,y,x)
+  call math.muldiv(winkel,winkel,time_turn_360/2,MAX_INT)
+  call math.muldiv(xx,x,x,MAX_INT)
+  call math.muldiv(yy,y,y,MAX_INT)
+  call math.sqrt(distance,xx+yy)
+  distance*=1
+  save=distance
+  
+  </node>
+
+
+</network>

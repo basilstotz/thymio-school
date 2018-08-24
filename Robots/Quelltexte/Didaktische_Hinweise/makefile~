@@ -1,0 +1,4 @@
+all: Didaktische_Hinweise.pdf
+
+%.pdf: %.odt
+	uniconv -f pdf $<
