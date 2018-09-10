@@ -1,0 +1,469 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="10" name="START_UP"/>
+<constant value="11" name="WAIT"/>
+<constant value="13" name="START"/>
+<constant value="14" name="TYPING"/>
+<constant value="100" name="SPEED"/>
+<constant value="500" name="GREY"/>
+<constant value="8" name="TABLE_SIZE"/>
+<constant value="15" name="OP_SIZE"/>
+<constant value="1" name="FORWARD"/>
+<constant value="2" name="BACKWARD"/>
+<constant value="3" name="LEFT"/>
+<constant value="4" name="RIGHT"/>
+<constant value="0" name="STOP"/>
+<constant value="-1" name="TOUCH"/>
+<constant value="0" name="FRONT"/>
+<constant value="1" name="BOTTOM"/>
+<constant value="2" name="TAP"/>
+<constant value="3" name="CLAP"/>
+<constant value="20" name="RANGE"/>
+<constant value="30" name="LCLICK"/>
+
+
+<!--show keywords state-->
+<keywords flag="false"/>
+
+
+<!--node thymio-II-->
+<node nodeId="58594" name="thymio-II">
+                                                                                                                          var led[3] = [0,0,0]
+
+var tap_count
+var tap_timer
+var tap_timeout=100 # 1000ms
+var tap_event
+var mic_count
+var mic_timer
+var mic_timeout=100 # 1000ms
+var mic_event
+
+var number
+var n[8]
+
+var tmp0
+var tmp1
+var tmp2
+var tmp3
+var loc0
+var loc1
+
+var speed
+var turn
+
+#vars for displaying programm counter
+var c[8]
+var d[4]
+var l
+
+#var counter_ani
+var dclick
+var counter_mode
+var fpressed
+#var counter_light
+
+var source=FRONT
+var old_source
+var mode = START_UP
+
+#  0:6  = prox.horizontal
+#  7:8  = prox.ground.delta
+#  9:11  = leds.top
+#  12    = dir
+#  13    = mic_event
+#  14    = tap_event
+var operation[OP_SIZE]   
+var program[TABLE_SIZE*OP_SIZE]
+var i
+var pc
+var done
+var dir
+
+
+
+#onevent startup
+  call leds.buttons(0,0,0,0)
+  call sound.system(-1)
+  call math.fill(program,0)
+  i=0
+  mic.threshold=100
+  speed=SPEED
+  call math.muldiv(turn,speed,100,100)
+   
+########## BOUTONS ##############
+onevent buttons
+  if button.left == 1 and button.right == 1 and mode==WAIT then
+	counter_mode++
+	if counter_mode > 50 then
+		source = (source+1)%(CLAP+1)
+		counter_mode = 0
+	end	
+  else
+	counter_mode = 0
+  end
+  
+  if mode == START_UP then
+    i=0
+	call math.fill(program,0)
+	mode = WAIT
+  elseif  mode==WAIT then
+    led=[31,31,0]
+    motor.left.target=0
+	motor.right.target=0
+	call leds.buttons(0,0,0,0)
+    if button.backward==1 then
+      call sound.system(2)
+      mode=START  	
+    end
+    when button.forward==1 do
+      fpressed=1
+    end
+    when button.forward==0 do
+          if fpressed==1 then
+             fpressed=0
+             call sound.system(2)
+             mode=START
+             led=[31,0,31]
+             old_source=source
+             source=TOUCH  	    	
+          end
+    end 
+  elseif mode==TYPING then
+    led=[31,31,31]
+	when button.forward == 1 do
+		call sound.system(2)
+        operation[12]=FORWARD
+        callsub set_events
+        callsub put
+	end
+	when button.backward == 1 do
+		call sound.system(2)		
+        operation[12]=BACKWARD
+        callsub set_events
+        callsub put
+	end
+	when button.left == 1 do
+		call sound.system(2)       
+		operation[12]=LEFT
+        callsub set_events
+        callsub put		
+	end
+	when button.right == 1 do
+		call sound.system(2)
+        operation[12]=RIGHT
+        callsub set_events
+        callsub put
+	end
+	if i >= TABLE_SIZE then
+		call sound.system(2)
+		mode = START
+	end    
+  elseif mode==START then
+       if source==TOUCH then
+         led=[31,0,31]	
+       else
+         led=[0,31,0]
+       end
+  end
+		
+  # center button
+  when button.center == 1 do
+        dclick=1
+  end
+  when button.center==0 do
+    if dclick>0 then
+	  if mode == WAIT then
+		mode = TYPING
+		call leds.buttons(0,0,0,0)
+		call sound.system(2)
+		i=0
+	    call math.fill(program,0)			
+		#led = [31,31,31]
+		#callsub led
+	  elseif mode == TYPING then
+	    if dclick &lt;LCLICK then
+		   call sound.system(2)
+           operation[12]=STOP
+           callsub set_events
+           callsub put
+	    else
+		  mode = START
+		    
+	    end
+	  elseif mode==START then
+	    #led=[31,0,31]	
+        if source==TOUCH then
+  	       if dclick &lt;LCLICK then
+		      call sound.system(2)
+              operation[12]=STOP
+	       else
+	          source=old_source
+              mode=WAIT
+              motor.left.target=0
+		      motor.right.target=0
+	          led=[31,31,0]
+		      call leds.buttons(0,0,0,0)
+	       end        	
+        else
+		   mode = WAIT
+	    end
+	  end
+      dclick=0
+    end
+  end
+  if button.center==1 then
+  	 dclick++
+  	 if dclick==LCLICK then
+	      call sound.system(2)
+	      led=[31,31,31]
+  	 end
+  end 
+  callsub led
+
+onevent prox
+if mode==START then
+  if  source==TOUCH then
+      if button.forward==1 then
+        tmp0=FORWARD 	
+      elseif button.backward==1 then
+        tmp0=BACKWARD
+      elseif button.left==1 then
+        tmp0=LEFT
+      elseif button.right==1 then
+        tmp0=RIGHT
+      elseif button.center==1 then
+        tmp0=STOP        
+      end
+      operation[12]=tmp0
+      callsub apply
+  else
+    pc=0
+    done=0
+    while pc&lt;i and done==0 do
+  	  callsub get
+      if  source==FRONT then
+           call math.dot(tmp0, operation[0:4],[13,26,39,26,13],11)
+       	   call math.dot(tmp1,prox.horizontal[0:4],[13,26,39,26,13],11)
+           if tmp0==0 and tmp1==0 then
+         	   callsub apply	
+           elseif tmp0>0 and tmp1>0 then
+               call math.dot(tmp2,operation[0:4],[-4,-3,0,3,4],9)
+               call math.dot(tmp3,prox.horizontal[0:4],[-4,-3,0,3,4],9)
+               if abs(tmp2)&lt;= RANGE and abs(tmp3)&lt;= RANGE then
+                   callsub apply	
+               elseif tmp2>RANGE and tmp3>RANGE then
+                   callsub apply
+               elseif  tmp2&lt;-RANGE and tmp3&lt;-RANGE then
+                   callsub apply
+               end             	
+           end           
+      elseif source==BOTTOM then                    
+        tmp1=1
+        for tmp0 in 0:1 do
+          if operation[7+tmp0]>GREY and prox.ground.delta[tmp0]&lt;GREY then
+            tmp1=0 	
+          end
+          if operation[7+tmp0]&lt;GREY and prox.ground.delta[tmp0]>GREY then
+            tmp1=0 	
+          end          
+        end
+        if  tmp1==1 then
+          callsub apply	
+        end	
+      elseif source==TAP then
+        if tap_event>0 and operation[14]==tap_event then
+          callsub apply
+          tap_event=0
+        end
+      elseif source==CLAP then
+        if mic_event>0 and operation[13]==mic_event then
+          callsub apply
+          mic_event=0
+        end
+      end # if source==...     
+    end #while     
+  end # if source==TOUCH
+end # if mode==START
+
+sub set_events
+    operation[0:6]=prox.horizontal
+    operation[7:8]=prox.ground.delta
+    operation[9:11]=[31,0,31]
+    operation[13]=tap_event
+    operation[14]=mic_event
+    tap_event=0
+    mic_event=0
+
+sub apply
+#   led=operation[9:11]
+   dir=operation[12]
+   if source==FRONT or source==TAP or source==CLAP or source==TOUCH then
+   	    if dir==FORWARD then
+   	 	    motor.left.target=speed
+   	 	    motor.right.target=speed
+   	    elseif dir==BACKWARD then
+   	       	motor.left.target=-speed
+   	 	    motor.right.target=-speed
+   	    elseif dir==LEFT then
+   	       	motor.left.target=-speed
+   	 	    motor.right.target=speed
+   	    elseif dir==RIGHT then
+   	         motor.left.target=speed
+   	 	     motor.right.target=-speed
+   	    elseif dir==STOP then   
+   	       	 motor.left.target=0
+   	 	     motor.right.target=0	    
+   	    end
+   elseif source==BOTTOM then
+   	    if dir==FORWARD then
+   	 	    motor.left.target=speed
+   	 	    motor.right.target=speed
+   	    elseif dir==BACKWARD then
+   	       	motor.left.target=-speed
+   	 	    motor.right.target=-speed
+   	    elseif dir==LEFT then
+   	       	motor.left.target=speed-turn
+   	 	    motor.right.target=speed+turn
+   	    elseif dir==RIGHT then
+   	         motor.left.target=speed+turn
+   	 	     motor.right.target=speed-turn
+   	    elseif dir==STOP then   
+   	       	 motor.left.target=0
+   	 	     motor.right.target=0	    
+   	    end   
+   end
+   done=1
+   
+sub put
+   loc0=i*OP_SIZE
+   for loc1 in 1:OP_SIZE do
+      program[loc0+loc1-1]=operation[loc1-1]
+   end
+   i++
+   
+sub get
+   loc0=pc*OP_SIZE
+   for loc1 in 1:OP_SIZE do
+      operation[loc1-1]=program[loc0+loc1-1]
+   end
+   pc++
+
+sub led
+  # top leds
+  call leds.top(led[0],led[1],led[2]) 
+  #  prox.horizontal leds
+  if source==BOTTOM then
+         if prox.ground.delta[0]>512 then
+            tmp0=31         	
+         else
+            tmp0=0
+         end
+         if prox.ground.delta[1]>512 then
+            tmp1=31         	
+         else
+            tmp1=0
+         end 
+         call leds.prox.h(0,0,tmp0,tmp1,0,0,0,0)
+  elseif source==FRONT then
+       	   call math.dot(tmp1,prox.horizontal[0:4],[13,26,39,26,13],11)
+           if tmp1==0  then
+         	   call leds.prox.h(0,0,0,0,0,0,0,0)	
+           else 
+               call math.dot(tmp3,prox.horizontal[0:4],[-4,-3,0,3,4],9)
+               if abs(tmp3)&lt;= RANGE then
+                   call leds.prox.h(0,0,31,31,0,0,0,0)
+               elseif tmp3>RANGE then
+                   call leds.prox.h(0,0,0,0,31,31,0,0)
+               elseif  tmp3&lt;-RANGE then
+                   call leds.prox.h(31,31,0,0,0,0,0,0)
+               end             	
+           end
+  elseif source==TAP then
+           number=tap_event
+           callsub show_number
+  elseif source==CLAP then
+           number=mic_event
+           callsub show_number             
+  else
+           call leds.prox.h(0,0,0,0,0,0,0,0)
+  end
+  # circle leds
+  call math.fill(c,0)
+  if mode==WAIT then
+      c[source]=31 	
+  elseif mode==TYPING then
+      c[i]=31
+  elseif mode==START and source!=TOUCH then
+      if pc>0 then
+        c[pc-1]=31       	
+      end
+  end
+  call leds.circle(c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7])      
+
+sub show_number
+  call math.fill(n,0)
+  for loc0 in 0:5 do
+  	if loc0&lt;number then
+  	   n[loc0]=31
+  	end
+  end
+  call leds.prox.h(n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7])
+  
+  
+# handle mic and tap events
+onevent tap
+  tap_count++
+  
+
+onevent mic
+  mic_count++
+
+
+onevent motor
+  if mic_count>0 then
+  	mic_timer++
+  end
+  if mic_timer==mic_timeout then
+    mic_event=mic_count 
+    mic_count=0
+    mic_timer=0  	
+  end  
+  if tap_count>0 then
+  	tap_timer++
+  end
+  if tap_timer==tap_timeout then
+    tap_event=tap_count 
+    tap_count=0
+    tap_timer=0  	
+  end
+  
+   
+  </node>
+
+
+<!--node thymio-II-->
+<node nodeId="46383" name="thymio-II">var distance.front = 190 ##!&amp;lt;  [out] distance front
+var distance.back  = 125 ##!&amp;lt;  [out] distance back
+var angle.front    = 0 ##!&amp;lt;  [out] angle front
+var angle.back     = 0 ##!&amp;lt;  [out] angle back
+var angle.ground   = 0 ##!&amp;lt;  [out] angle ground
+
+onevent buttons
+call math.dot(distance.front, prox.horizontal,[13,26,39,26,13,0,0],11)
+call math.clamp(distance.front,190-distance.front,0,190) # client should clamp to 0..190
+call math.max(distance.back, prox.horizontal[5],prox.horizontal[6])
+call math.muldiv(distance.back, distance.back, 267,10000)
+call math.clamp(distance.back,125-distance.back,0,125) # client should clamp to 0..125
+call math.dot(angle.front, prox.horizontal,[4,3,0,-3,-4,0,0],9)
+call math.dot(angle.back, prox.horizontal,[0,0,0,0,0,-4,4],9)
+call math.dot(angle.ground, prox.ground.delta,[4,-4],7)</node>
+
+
+</network>
