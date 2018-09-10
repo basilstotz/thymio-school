@@ -3,7 +3,6 @@
 
 
 <!--list of global events-->
-<event size="2" name="time"/>
 
 
 <!--list of constants-->
@@ -41,7 +40,7 @@
 
 
 <!--node thymio-II-->
-<node nodeId="58594" name="thymio-II">####### CODE THYMIO BEEBOT-LIKE #######
+<node nodeId="46383" name="thymio-II">####### CODE THYMIO BEEBOT-LIKE #######
 
 ## CODE ECRIT PAR CHRISTOPHE BARRAUD
 ## DERNIERE MODIFICATION LE 12 FEVRIER 2016
@@ -130,12 +129,6 @@ var dclick
 
 onevent timer0
   # handles START and CALIB
-#  z=(z+1)%2
-#  if z==0 then
-#  	call leds.bottom.right(31,0,0)
-#  else
-#    call leds.bottom.right(0,0,0)
-#  end
   if mode == START  then
         if  table[j]==PAUSE then
            j++
@@ -371,6 +364,7 @@ onevent prox
 	elseif submode == 1 then
 		led_clignote = ROUGE
 	end
+	#calib straight line submode==2
 	if submode == 2 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
 		call math.muldiv(time_straight_20cm,TIME_STEP,counter,1)
 #		sumbakw=(suml+sumr)/2
@@ -382,6 +376,7 @@ onevent prox
 		turns=0
 		counter = 0
 		submode = 3
+	#calib left turn submode==3
 	elseif submode == 3 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
 		if turns==0 then
 		   time_left_turn_360=(4*counter)/3
@@ -395,7 +390,7 @@ onevent prox
 		else
 		   time_left_turn_360+=counter
 		   turns++
-		   call math.muldiv(time_right_turn_360,time_left_turn_360,TIME_STEP,turns)
+		   call math.muldiv(time_left_turn_360,time_left_turn_360,TIME_STEP,turns)
 		   #time_left_turn_360/=turns
 #		   sumbakl=abs(suml/turns)
 		   dir=RIGHT
@@ -403,10 +398,11 @@ onevent prox
 		   counter = 0
 		   submode = 4
        	   suml=0
-	       sumr=0
-	       sl=0
-           sr=0		   
-		   safe_time=4*time_left_turn_360/5
+	        sumr=0
+	        sl=0
+             sr=0		   
+		   #safe_time=4*time_left_turn_360/5
+		   call math.muldiv(safe_time,time_left_turn_360,4,5*TIME_STEP)
 	    end
 	elseif submode == 4 and counter >safe_time and prox.ground.delta[0] &lt; grey and prox.ground.delta[1] &lt; grey then
 		if turns==0 then
@@ -421,7 +417,6 @@ onevent prox
 		   dir=STOP
 		   time_right_turn_360+=counter
 		   turns++
-		   submode = 0
 		   call math.muldiv(time_right_turn_360,time_right_turn_360,TIME_STEP,turns)
 #		   sumbakr=abs(sumr/turns)
            #time_right_turn_360*=TIME_STEP
@@ -432,6 +427,7 @@ onevent prox
 		   data[2] = time_right_turn_360
 		   callsub sd_write_values
 		   mode = WAIT
+		   submode = 0
 	    end    
 	end
   end
@@ -522,8 +518,7 @@ onevent motor
         sumr+=int
         sr-=16*int	 
         wayd=abs(suml)-abs(sumr)
-        #if wayd!=o_wayd then
-        #    wayd=0
+         #wayd=0
           if dir==FORWARD then  	     
             motor.left.target=speed-wayd
    	        motor.right.target=speed+wayd
@@ -536,8 +531,7 @@ onevent motor
           elseif dir==RIGHT then	        
             motor.left.target = speed -wayd
             motor.right.target = -speed -wayd
-          end 
-        #  o_wayd=wayd       	
+          end       	
         #end
     else 
 	      motor.left.target = 0
@@ -554,7 +548,7 @@ sub led
   if i>0 then
     c[(i/2-1)%8]+=4 	
   end
-  if  mode==START and i>0 then
+  if  mode==START and j>1 then
     c[(j/2-1)%8]+=27 	
   end
   call leds.circle(c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7])      
