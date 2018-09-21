@@ -40,7 +40,7 @@
 
 
 <!--node thymio-II-->
-<node nodeId="46383" name="thymio-II">####### CODE THYMIO BEEBOT-LIKE #######
+<node nodeId="38929" name="thymio-II">####### CODE THYMIO BEEBOT-LIKE #######
 
 ## CODE ECRIT PAR CHRISTOPHE BARRAUD
 ## DERNIERE MODIFICATION LE 12 FEVRIER 2016
@@ -501,37 +501,51 @@ onevent timer1
   
 onevent motor
   #call leds.bottom.left(31,31,31)
-  if dir!=odir then
-        sl=0
-        sr=0
-        suml=0
-        sumr=0
-        odir=dir
-   end
+#  if dir!=odir then
+#        sl=0
+#        sr=0
+#        suml=0
+#        sumr=0
+#        odir=dir
+#   end
   if dir!=STOP then
-        sl += motor.left.speed
-        int=sl/16
-        suml+=int
-        sl-=16*int	
-        sr += motor.right.speed
-        int=sr/16
-        sumr+=int
-        sr-=16*int	 
-        wayd=abs(suml)-abs(sumr)
-         #wayd=0
+#        sl += motor.left.speed
+#        int=sl/16
+#        suml+=int
+#        sl-=16*int	
+#        sr += motor.right.speed
+#        int=sr/16
+#        sumr+=int
+#        sr-=16*int	 
+#        wayd=abs(suml)-abs(sumr)
+         wayd=0
+#          if dir==FORWARD then  	     
+#            motor.left.target=speed-wayd
+#   	        motor.right.target=speed+wayd
+#          elseif dir==BACKWARD then		     
+#            motor.left.target=-speed +wayd
+#            motor.right.target=-speed -wayd
+#          elseif dir==LEFT then	        
+#            motor.left.target = -speed +wayd
+#	        motor.right.target = speed +wayd
+#          elseif dir==RIGHT then	        
+#            motor.left.target = speed -wayd
+#            motor.right.target = -speed -wayd
+#          end       	
           if dir==FORWARD then  	     
-            motor.left.target=speed-wayd
-   	        motor.right.target=speed+wayd
+            motor.left.target=speed
+   	        motor.right.target=speed
           elseif dir==BACKWARD then		     
-            motor.left.target=-speed +wayd
-            motor.right.target=-speed -wayd
+            motor.left.target=-speed 
+            motor.right.target=-speed 
           elseif dir==LEFT then	        
-            motor.left.target = -speed +wayd
-	        motor.right.target = speed +wayd
+            motor.left.target = -speed
+	        motor.right.target = speed 
           elseif dir==RIGHT then	        
-            motor.left.target = speed -wayd
-            motor.right.target = -speed -wayd
+            motor.left.target = speed 
+            motor.right.target = -speed 
           end       	
+
         #end
     else 
 	      motor.left.target = 0
