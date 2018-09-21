@@ -57,7 +57,7 @@ var j = 0
 var k = 0
 
 var turns=0 #count turns during calibration
-
+var init_wait=0
 
 var counter_calib = 0
 
@@ -217,7 +217,10 @@ onevent buttons
   if mode == START_UP then
 	callsub sd_read_values
 	call math.fill(table,0)
-	mode = WAIT
+#	init_wait++
+#	if init_wait>30 then
+	  mode = WAIT		
+#	end
   elseif mode == WAIT then
 	led = [0,0,0]
 	#callsub led
